@@ -11,6 +11,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.katachilabs.shelves.data.BookRepository
 import com.katachilabs.shelves.ui.add.AddBookScreen
 import com.katachilabs.shelves.ui.book.BookScreen
 import com.katachilabs.shelves.ui.loans.LoansScreen
@@ -50,12 +51,14 @@ private fun ShelvesNavHost() {
         }
         composable("shelf/{shelfId}", arguments = listOf(navArgument("shelfId") { type = NavType.LongType })) { entry ->
             val shelfId = entry.arguments!!.getLong("shelfId")
+            // L'étagère virtuelle « Non rangés » n'existe pas en base : on n'y range rien.
+            val realShelfId = shelfId.takeIf { it != BookRepository.UNSHELVED_ID }
             ShelfScreen(
                 shelfId = shelfId,
                 onBack = back,
-                onAddBook = { nav.navigate("add?shelfId=$shelfId") },
+                onAddBook = { nav.navigate("add?shelfId=${realShelfId ?: NO_SHELF}") },
                 onOpenBook = ::openBook,
-                onOpenSeries = { openSeries(it, shelfId) },
+                onOpenSeries = { openSeries(it, realShelfId) },
             )
         }
         composable(

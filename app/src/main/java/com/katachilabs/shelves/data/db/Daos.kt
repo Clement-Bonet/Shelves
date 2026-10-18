@@ -77,6 +77,16 @@ interface BookDao {
     )
     fun observeInShelf(shelfId: Long): Flow<List<Book>>
 
+    /**
+     * Livres possédés rangés dans aucune étagère. Les tomes de série non possédés, récupérés
+     * à la BnF, n'y figurent pas : ils restent visibles depuis leur série.
+     */
+    @Query("SELECT * FROM books WHERE owned = 1 AND id NOT IN (SELECT bookId FROM shelf_books) ORDER BY title COLLATE NOCASE")
+    fun observeUnshelved(): Flow<List<Book>>
+
+    @Query("SELECT COUNT(*) FROM books WHERE owned = 1 AND id NOT IN (SELECT bookId FROM shelf_books)")
+    fun observeUnshelvedCount(): Flow<Int>
+
     @Query("SELECT * FROM books WHERE id = :id")
     fun observe(id: Long): Flow<Book?>
 

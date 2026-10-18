@@ -80,7 +80,7 @@ data class ShelfUiState(val shelf: Shelf?, val items: List<ShelfItem>)
 
 class ShelfViewModel(private val repository: BookRepository, private val shelfId: Long) : ViewModel() {
     val state = combine(
-        repository.shelf(shelfId),
+        repository.shelfOrVirtual(shelfId),
         repository.booksInShelf(shelfId),
         repository.allSeries(),
         repository.seriesStats(),
@@ -126,6 +126,7 @@ fun ShelfScreen(
     onOpenSeries: (String) -> Unit,
 ) {
     val viewModel = appViewModel { ShelfViewModel(it.repository, shelfId) }
+    val virtual = shelfId == BookRepository.UNSHELVED_ID
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -171,7 +172,7 @@ fun ShelfScreen(
                             })
                         }
                     }
-                    Box {
+                    if (!virtual) Box {
                         IconButton(onClick = { menuOpen = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "Plus") }
                         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                             DropdownMenuItem(text = { Text("Renommer") }, onClick = {
@@ -200,7 +201,8 @@ fun ShelfScreen(
             items == null -> Unit
             items.isEmpty() -> Box(Modifier.fillMaxSize().padding(padding).padding(32.dp), contentAlignment = Alignment.Center) {
                 Text(
-                    "Étagère vide. Scannez le code-barres d'un livre ou saisissez son ISBN pour l'ajouter.",
+                    if (virtual) "Tous vos livres sont rangés dans une étagère."
+                    else "Étagère vide. Scannez le code-barres d'un livre ou saisissez son ISBN pour l'ajouter.",
                     textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.bodyLarge,
                 )

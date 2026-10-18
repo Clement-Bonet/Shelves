@@ -6,7 +6,7 @@ Sources de données : voir [docs/sources-de-donnees.md](docs/sources-de-donnees.
 
 ## Fonctionnalités
 
-- **Étagères** : regroupements de livres créés par l'utilisateur (un livre peut être sur plusieurs étagères).
+- **Étagères** : regroupements de livres créés par l'utilisateur (un livre peut être sur plusieurs étagères). Une étagère virtuelle « Non rangés » réunit les livres possédés qui ne sont dans aucune étagère ; elle n'apparaît que s'il y en a.
 - **Ajout** : scan du code-barres EAN-13 / EAN-8 (scanner Google Play Services, sans permission caméra) ou saisie de l'ISBN.
 - **Recherche** : BnF (notice, série, résumé) et Open Library (couverture), interrogées en parallèle ; Google Books en plus si l'utilisateur saisit sa propre clé.
 - **Couverture** : photo prise avec l'appareil photo du téléphone depuis la fiche du livre (aucune permission caméra demandée), redressée et réduite, stockée sur le téléphone.

@@ -16,6 +16,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
 class BookRepository(
@@ -35,7 +36,14 @@ class BookRepository(
     fun shelves() = shelfDao.observeAll()
     fun shelf(id: Long) = shelfDao.observe(id)
     fun shelvesOfBook(bookId: Long) = shelfDao.observeShelvesOfBook(bookId)
-    fun booksInShelf(shelfId: Long) = bookDao.observeInShelf(shelfId)
+    fun booksInShelf(shelfId: Long) =
+        if (shelfId == UNSHELVED_ID) bookDao.observeUnshelved() else bookDao.observeInShelf(shelfId)
+    fun unshelvedCount() = bookDao.observeUnshelvedCount()
+
+    /** Étagère virtuelle « Non rangés » : jamais en base, reconstruite à l'affichage. */
+    fun shelfOrVirtual(id: Long) =
+        if (id == UNSHELVED_ID) flowOf(Shelf(id = UNSHELVED_ID, name = UNSHELVED_NAME, description = UNSHELVED_DESCRIPTION))
+        else shelfDao.observe(id)
     fun book(id: Long) = bookDao.observe(id)
     fun series(id: String) = seriesDao.observe(id)
     fun allSeries() = seriesDao.observeAll()
@@ -256,6 +264,11 @@ class BookRepository(
             bnfArk = bnfArk ?: meta.bnfArk,
             sources = (sources?.split(", ").orEmpty() + meta.sources).distinct().joinToString(", ").ifBlank { null },
         )
+
+        /** Identifiant de l'étagère virtuelle des livres possédés rangés nulle part. */
+        const val UNSHELVED_ID = -2L
+        const val UNSHELVED_NAME = "Non rangés"
+        const val UNSHELVED_DESCRIPTION = "Livres possédés qui ne sont dans aucune étagère"
 
         /** Préfixe des séries créées à la main (aucune notice BnF à interroger). */
         const val MANUAL_PREFIX = "u:"
