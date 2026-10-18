@@ -11,6 +11,7 @@ Sources de données : voir [docs/sources-de-donnees.md](docs/sources-de-donnees.
 - **Recherche** : BnF (notice, série, résumé) et Open Library (couverture), interrogées en parallèle ; Google Books en plus si l'utilisateur saisit sa propre clé.
 - **Couverture** : photo prise avec l'appareil photo du téléphone depuis la fiche du livre (aucune permission caméra demandée), redressée et réduite, stockée sur le téléphone.
 - **Séries** : à l'ajout d'un tome, les autres tomes de la même édition sont récupérés à la BnF ; chaque série affiche « x / y tomes possédés » et se coche tome par tome.
+- **Corrections manuelles** : depuis la fiche d'un livre, choisir sa série (existante, nouvelle ou aucune) et son tome ; depuis une série, la renommer ou la fusionner dans une autre (utile quand la BnF répartit une même série sur plusieurs notices). Les choix manuels ne sont jamais écrasés par une synchronisation, et une série fusionnée continue d'apporter ses tomes BnF à la série qui l'a reçue.
 - **Stockage local** : base Room ; sauvegarde automatique Android vers Google Drive, plus export/import d'une archive ZIP (données + photos) via le sélecteur de fichiers (Google Drive y figure).
 - **Partage** : une étagère par SMS ou e-mail à un contact du téléphone, ou vers une autre application ; prêt d'un livre à un contact, et liste des prêts en cours.
 

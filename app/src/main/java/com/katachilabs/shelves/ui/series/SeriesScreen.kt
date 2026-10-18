@@ -1,6 +1,7 @@
 package com.katachilabs.shelves.ui.series
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,7 +11,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -25,7 +30,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -34,8 +41,11 @@ import androidx.lifecycle.viewModelScope
 import com.katachilabs.shelves.data.BookRepository
 import com.katachilabs.shelves.data.db.Book
 import com.katachilabs.shelves.ui.common.Cover
+import com.katachilabs.shelves.ui.common.RenameSeriesDialog
+import com.katachilabs.shelves.ui.common.SeriesChoice
+import com.katachilabs.shelves.ui.common.SeriesPickerDialog
 import com.katachilabs.shelves.ui.common.appViewModel
-import androidx.compose.material3.Checkbox
+
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -85,16 +95,38 @@ class SeriesViewModel(
 
     /** Cocher un tome le marque possédé et le range dans l'étagère d'où l'on vient. */
     fun setOwned(book: Book, owned: Boolean) = viewModelScope.launch { repository.setOwned(book, owned, shelfId) }
+
+    val otherSeries = repository.activeSeries().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun rename(title: String, publisher: String) = viewModelScope.launch {
+        series.value?.let { repository.renameSeries(it, title, publisher) }
+    }
+
+    /** Fusionne cette série dans [targetId] puis appelle [onDone] avec l'identifiant de la série restante. */
+    fun mergeInto(targetId: String, onDone: (String) -> Unit) = viewModelScope.launch {
+        repository.mergeSeries(seriesId, targetId)
+        onDone(targetId)
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SeriesScreen(seriesId: String, shelfId: Long?, onBack: () -> Unit, onOpenBook: (Long) -> Unit) {
+fun SeriesScreen(
+    seriesId: String,
+    shelfId: Long?,
+    onBack: () -> Unit,
+    onOpenBook: (Long) -> Unit,
+    onMerged: (targetId: String) -> Unit,
+) {
     val viewModel = appViewModel { SeriesViewModel(it.repository, seriesId, shelfId) }
     val series by viewModel.series.collectAsStateWithLifecycle()
     val volumes by viewModel.volumes.collectAsStateWithLifecycle()
     val syncing by viewModel.syncing.collectAsStateWithLifecycle()
+    val otherSeries by viewModel.otherSeries.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
+    var menuOpen by remember { mutableStateOf(false) }
+    var renaming by remember { mutableStateOf(false) }
+    var merging by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { viewModel.messages.collect { snackbar.showSnackbar(it) } }
 
@@ -118,6 +150,19 @@ fun SeriesScreen(seriesId: String, shelfId: Long?, onBack: () -> Unit, onOpenBoo
                 actions = {
                     IconButton(onClick = viewModel::sync, enabled = !syncing) {
                         Icon(Icons.Filled.Sync, contentDescription = "Chercher les tomes à la BnF")
+                    }
+                    Box {
+                        IconButton(onClick = { menuOpen = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "Plus") }
+                        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                            DropdownMenuItem(text = { Text("Renommer la série") }, onClick = {
+                                menuOpen = false
+                                renaming = true
+                            })
+                            DropdownMenuItem(text = { Text("Fusionner dans une autre série…") }, onClick = {
+                                menuOpen = false
+                                merging = true
+                            })
+                        }
                     }
                 },
             )
@@ -144,6 +189,36 @@ fun SeriesScreen(seriesId: String, shelfId: Long?, onBack: () -> Unit, onOpenBoo
                     )
                 }
             }
+        }
+    }
+
+    series?.let { s ->
+        if (renaming) {
+            RenameSeriesDialog(
+                series = s,
+                onDismiss = { renaming = false },
+                onConfirm = { title, publisher ->
+                    renaming = false
+                    viewModel.rename(title, publisher)
+                },
+            )
+        }
+        if (merging) {
+            SeriesPickerDialog(
+                title = "Fusionner « ${s.title} » dans…",
+                series = otherSeries,
+                currentId = null,
+                confirmLabel = "Fusionner",
+                allowNone = false,
+                allowCreate = false,
+                showVolume = false,
+                excludeId = s.id,
+                onDismiss = { merging = false },
+                onConfirm = { choice, _ ->
+                    merging = false
+                    (choice as? SeriesChoice.Existing)?.let { viewModel.mergeInto(it.id, onMerged) }
+                },
+            )
         }
     }
 }

@@ -39,6 +39,7 @@ class BookRepository(
     fun book(id: Long) = bookDao.observe(id)
     fun series(id: String) = seriesDao.observe(id)
     fun allSeries() = seriesDao.observeAll()
+    fun activeSeries() = seriesDao.observeActive()
     fun seriesVolumes(seriesId: String) = bookDao.observeSeriesVolumes(seriesId)
     fun seriesStats() = bookDao.observeSeriesStats()
     fun loans() = bookDao.observeLoans()
@@ -125,7 +126,10 @@ class BookRepository(
      */
     suspend fun syncSeries(seriesId: String): Int {
         val series = seriesDao.get(seriesId) ?: return 0
-        val volumes = lookupService.seriesVolumes(series.title, series.publisher, series.bnfRecordId)
+        // Les séries fusionnées dans celle-ci apportent aussi leurs volumes BnF.
+        val volumes = (listOf(series) + seriesDao.mergedInto(seriesId))
+            .filter { it.bnfRecordId != null || !it.id.startsWith(MANUAL_PREFIX) }
+            .flatMap { lookupService.seriesVolumes(it.bnfTitle ?: it.title, it.bnfPublisher ?: it.publisher, it.bnfRecordId) }
         var added = 0
         db.withTransaction {
             for (volume in volumes) {
@@ -156,9 +160,48 @@ class BookRepository(
         }
     }
 
+    // --- Corrections manuelles ---
+
+    /** Range un livre dans une série (ou aucune) avec son tome ; les synchronisations n'y toucheront plus. */
+    suspend fun setBookSeries(book: Book, seriesId: String?, volumeNumber: Double?, volumeLabel: String?) =
+        bookDao.update(
+            book.copy(
+                seriesId = seriesId,
+                volumeNumber = volumeNumber.takeIf { seriesId != null },
+                volumeLabel = volumeLabel?.trim()?.ifBlank { null }.takeIf { seriesId != null },
+                seriesLocked = true,
+            ),
+        )
+
+    /** Crée une série saisie par l'utilisateur (ou renvoie celle qui porte déjà ce titre chez cet éditeur). */
+    suspend fun createSeries(title: String, publisher: String?): String {
+        val id = MANUAL_PREFIX + "${title.normalizedKey()}|${publisher.orEmpty().normalizedKey()}"
+        val existing = seriesDao.get(id)
+        if (existing != null) return existing.mergedInto ?: existing.id
+        seriesDao.upsert(Series(id = id, title = title.trim(), publisher = publisher?.trim()?.ifBlank { null }))
+        return id
+    }
+
+    suspend fun renameSeries(series: Series, title: String, publisher: String?) =
+        seriesDao.upsert(series.copy(title = title.trim(), publisher = publisher?.trim()?.ifBlank { null }))
+
+    /**
+     * Fusionne une série dans une autre : ses volumes y sont déplacés, et les prochaines
+     * synchronisations de la série cible rapatrieront aussi ceux de la série fusionnée.
+     */
+    suspend fun mergeSeries(sourceId: String, targetId: String) {
+        if (sourceId == targetId) return
+        db.withTransaction {
+            bookDao.moveSeries(sourceId, targetId)
+            seriesDao.redirect(sourceId, targetId)
+        }
+    }
+
     private suspend fun upsertSeries(ref: SeriesRef, publisher: String?): String {
         val id = seriesKey(ref, publisher)
         val existing = seriesDao.get(id)
+        // Série fusionnée par l'utilisateur : les nouveaux volumes vont dans la série cible.
+        existing?.mergedInto?.let { return it }
         seriesDao.upsert(
             Series(
                 id = id,
@@ -166,6 +209,8 @@ class BookRepository(
                 publisher = existing?.publisher ?: publisher,
                 bnfRecordId = existing?.bnfRecordId ?: ref.bnfRecordId,
                 lastSyncedAt = existing?.lastSyncedAt,
+                bnfTitle = existing?.bnfTitle ?: ref.title,
+                bnfPublisher = existing?.bnfPublisher ?: publisher,
             ),
         )
         return id
@@ -205,13 +250,16 @@ class BookRepository(
             summary = summary ?: meta.summary,
             coverUrl = meta.coverUrl?.takeIf { coverUrl == null || coverUrl.startsWith(OL_COVER_PREFIX) } ?: coverUrl
                 ?: (isbn ?: meta.isbn)?.let { OpenLibraryClient.coverUrl(it) },
-            seriesId = this.seriesId ?: seriesId,
-            volumeNumber = volumeNumber ?: meta.series?.volumeNumber,
-            volumeLabel = volumeLabel ?: meta.series?.volumeLabel,
+            seriesId = if (seriesLocked) this.seriesId else this.seriesId ?: seriesId,
+            volumeNumber = if (seriesLocked) volumeNumber else volumeNumber ?: meta.series?.volumeNumber,
+            volumeLabel = if (seriesLocked) volumeLabel else volumeLabel ?: meta.series?.volumeLabel,
             bnfArk = bnfArk ?: meta.bnfArk,
             sources = (sources?.split(", ").orEmpty() + meta.sources).distinct().joinToString(", ").ifBlank { null },
         )
 
-        private const val OL_COVER_PREFIX = "https://covers.openlibrary.org/b/isbn/"
+        /** Préfixe des séries créées à la main (aucune notice BnF à interroger). */
+        const val MANUAL_PREFIX = "u:"
+
+        private const val OL_COVER_PREFIX ="https://covers.openlibrary.org/b/isbn/"
     }
 }

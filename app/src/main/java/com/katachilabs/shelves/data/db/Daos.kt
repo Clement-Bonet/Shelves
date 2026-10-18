@@ -108,6 +108,10 @@ interface BookDao {
     @Update
     suspend fun update(book: Book)
 
+    /** Déplace tous les volumes d'une série dans une autre (fusion manuelle). */
+    @Query("UPDATE books SET seriesId = :targetId, seriesLocked = 1 WHERE seriesId = :sourceId")
+    suspend fun moveSeries(sourceId: String, targetId: String)
+
     @Delete
     suspend fun delete(book: Book)
 
@@ -125,6 +129,16 @@ interface BookDao {
 interface SeriesDao {
     @Query("SELECT * FROM series")
     fun observeAll(): Flow<List<Series>>
+
+    /** Séries proposées à l'utilisateur : celles qui n'ont pas été fusionnées dans une autre. */
+    @Query("SELECT * FROM series WHERE mergedInto IS NULL ORDER BY title COLLATE NOCASE")
+    fun observeActive(): Flow<List<Series>>
+
+    @Query("SELECT * FROM series WHERE mergedInto = :targetId")
+    suspend fun mergedInto(targetId: String): List<Series>
+
+    @Query("UPDATE series SET mergedInto = :targetId WHERE id = :sourceId OR mergedInto = :sourceId")
+    suspend fun redirect(sourceId: String, targetId: String)
 
     @Query("SELECT * FROM series WHERE id = :id")
     fun observe(id: String): Flow<Series?>

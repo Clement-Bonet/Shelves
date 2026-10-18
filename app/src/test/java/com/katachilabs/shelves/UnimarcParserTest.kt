@@ -79,6 +79,28 @@ class UnimarcParserTest {
     }
 
     @Test
+    fun manualSeriesSurvivesSync() {
+        val volume = BookMetadata(
+            isbn = "9782723488525",
+            title = "Romance dawn",
+            series = com.katachilabs.shelves.data.remote.SeriesRef("One piece", "43702987", "1", 1.0),
+            sources = listOf("BnF"),
+        )
+        val manual = com.katachilabs.shelves.data.db.Book(
+            isbn = "9782723488525", title = "Romance dawn", seriesId = "u:one piece|glenat",
+            volumeNumber = 1.0, volumeLabel = "1", seriesLocked = true,
+        )
+        with(com.katachilabs.shelves.data.BookRepository) {
+            val synced = manual.mergedWith(volume, "bnf:43702987")
+            assertEquals("u:one piece|glenat", synced.seriesId)
+            // Retiré de toute série à la main : la synchronisation ne le raccroche pas.
+            assertEquals(null, manual.copy(seriesId = null, volumeNumber = null, volumeLabel = null).mergedWith(volume, "bnf:43702987").seriesId)
+            // Sans verrou, la série trouvée est appliquée.
+            assertEquals("bnf:43702987", manual.copy(seriesId = null, seriesLocked = false).mergedWith(volume, "bnf:43702987").seriesId)
+        }
+    }
+
+    @Test
     fun formatsVolumeRanges() {
         assertEquals("1-3, 5, 7-8", formatVolumeRanges(listOf(8.0, 1.0, 2.0, 3.0, 5.0, 7.0)))
         assertEquals("1, 1.5, 2", formatVolumeRanges(listOf(1.0, 1.5, 2.0)))

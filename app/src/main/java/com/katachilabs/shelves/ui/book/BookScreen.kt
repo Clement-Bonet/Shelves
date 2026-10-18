@@ -59,8 +59,12 @@ import com.katachilabs.shelves.data.CoverStore
 import com.katachilabs.shelves.data.db.Book
 import com.katachilabs.shelves.data.db.Series
 import com.katachilabs.shelves.data.db.Shelf
+import com.katachilabs.shelves.data.remote.parseVolumeNumber
 import com.katachilabs.shelves.ui.common.ConfirmDialog
 import com.katachilabs.shelves.ui.common.Cover
+import com.katachilabs.shelves.ui.common.SeriesChoice
+import com.katachilabs.shelves.ui.common.SeriesPickerDialog
+import com.katachilabs.shelves.ui.common.formatVolumeRanges
 import com.katachilabs.shelves.ui.common.appViewModel
 import com.katachilabs.shelves.ui.common.contactName
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -110,6 +114,19 @@ class BookViewModel(
     fun saveNotes(notes: String) = viewModelScope.launch { current?.let { repository.update(it.copy(notes = notes.ifBlank { null })) } }
     fun delete() = viewModelScope.launch { current?.let { repository.delete(it) } }
 
+    val seriesList = repository.activeSeries().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Rangement manuel dans une série (existante, nouvelle ou aucune) avec le tome saisi. */
+    fun setSeries(choice: SeriesChoice, volume: String) = viewModelScope.launch {
+        val b = current ?: return@launch
+        val seriesId = when (choice) {
+            SeriesChoice.None -> null
+            is SeriesChoice.Existing -> choice.id
+            is SeriesChoice.New -> repository.createSeries(choice.title, choice.publisher)
+        }
+        repository.setBookSeries(b, seriesId, parseVolumeNumber(volume), volume)
+    }
+
     fun captureUri() = covers.captureUri()
 
     /** Renvoie un message d'erreur, ou `null` si la photo est enregistrée. */
@@ -138,6 +155,8 @@ fun BookScreen(bookId: Long, onBack: () -> Unit, onOpenSeries: (String) -> Unit)
     val snackbar = remember { SnackbarHostState() }
     var menuOpen by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
+    var editingSeries by remember { mutableStateOf(false) }
+    val seriesList by viewModel.seriesList.collectAsStateWithLifecycle()
 
     // L'application photo du téléphone prend la couverture : aucune permission caméra à demander.
     val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { taken ->
@@ -234,6 +253,24 @@ fun BookScreen(bookId: Long, onBack: () -> Unit, onOpenSeries: (String) -> Unit)
                 Switch(checked = book.owned, onCheckedChange = viewModel::setOwned)
             }
 
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Série", style = MaterialTheme.typography.labelMedium)
+                    Text(
+                        ui.series?.let { s ->
+                            val volume = book.volumeNumber?.let { "tome ${formatVolumeRanges(listOf(it))}" } ?: book.volumeLabel
+                            listOfNotNull(s.title, volume).joinToString(" · ")
+                        }
+                            ?: "Aucune",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    if (book.seriesLocked) {
+                        Text("Rangement fixé à la main", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                TextButton(onClick = { editingSeries = true }) { Text("Modifier") }
+            }
+
             Loan(book, onLend = { pickContact.launch(null) }, onReturned = viewModel::returned)
 
             book.summary?.let {
@@ -264,6 +301,22 @@ fun BookScreen(bookId: Long, onBack: () -> Unit, onOpenSeries: (String) -> Unit)
             HorizontalDivider()
             Notes(book, viewModel::saveNotes)
         }
+    }
+
+    if (editingSeries) {
+        val book = state?.book
+        SeriesPickerDialog(
+            title = "Série du livre",
+            series = seriesList,
+            currentId = book?.seriesId,
+            initialVolume = book?.volumeLabel ?: book?.volumeNumber?.let { formatVolumeRanges(listOf(it)) }.orEmpty(),
+            confirmLabel = "Enregistrer",
+            onDismiss = { editingSeries = false },
+            onConfirm = { choice, volume ->
+                editingSeries = false
+                viewModel.setSeries(choice, volume)
+            },
+        )
     }
 
     if (deleting) {

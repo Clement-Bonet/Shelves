@@ -1,13 +1,15 @@
 package com.katachilabs.shelves.data.db
 
 import android.content.Context
+import androidx.room.AutoMigration
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(
     entities = [Shelf::class, Series::class, Book::class, ShelfBook::class],
-    version = 1,
+    version = 2,
+    autoMigrations = [AutoMigration(from = 1, to = 2)],
     exportSchema = true,
 )
 abstract class ShelvesDatabase : RoomDatabase() {

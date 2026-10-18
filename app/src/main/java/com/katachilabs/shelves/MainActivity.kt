@@ -90,6 +90,12 @@ private fun ShelvesNavHost() {
                 shelfId = args.getLong("shelfId").takeIf { it != NO_SHELF },
                 onBack = back,
                 onOpenBook = ::openBook,
+                onMerged = { targetId ->
+                    // La série fusionnée est vide : on affiche à sa place la série qui la reçoit.
+                    nav.navigate("series/${Uri.encode(targetId)}?shelfId=${args.getLong("shelfId")}") {
+                        popUpTo(entry.destination.id) { inclusive = true }
+                    }
+                },
             )
         }
         composable("loans") { LoansScreen(onBack = back, onOpenBook = ::openBook) }

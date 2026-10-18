@@ -1,5 +1,6 @@
 package com.katachilabs.shelves.data.db
 
+import androidx.room.ColumnInfo
 import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.ForeignKey
@@ -30,6 +31,14 @@ data class Series(
     val publisher: String? = null,
     val bnfRecordId: String? = null,
     val lastSyncedAt: Long? = null,
+    /**
+     * Série fusionnée par l'utilisateur dans une autre : ses livres ont été déplacés vers celle-ci,
+     * et ses volumes BnF y sont rangés à chaque synchronisation.
+     */
+    val mergedInto: String? = null,
+    /** Titre et éditeur tels que la BnF les connaît : la recherche des volumes s'en sert, même après un renommage. */
+    val bnfTitle: String? = null,
+    val bnfPublisher: String? = null,
 )
 
 /**
@@ -75,6 +84,9 @@ data class Book(
     val loanedAt: Long? = null,
     val notes: String? = null,
     val addedAt: Long = System.currentTimeMillis(),
+    /** Série et tome fixés à la main : les synchronisations ne les modifient plus. */
+    @ColumnInfo(defaultValue = "0")
+    val seriesLocked: Boolean = false,
 )
 
 @Serializable
