@@ -8,11 +8,17 @@ import kotlinx.serialization.json.Json
  * une clé gratuite (console Google Cloud) donne 1 000 requêtes par jour.
  * Documentation : https://developers.google.com/books/docs/v1/using
  */
-class GoogleBooksClient(private val http: Http, private val json: Json) {
+class GoogleBooksClient(
+    private val http: Http,
+    private val json: Json,
+    /** En-têtes d'identification de l'application, pour une clé restreinte à Android (voir [AppSignature]). */
+    private val androidHeaders: Map<String, String> = emptyMap(),
+) {
 
     suspend fun findByIsbn(isbn: String, apiKey: String?): BookMetadata? {
-        val key = apiKey?.takeIf { it.isNotBlank() }?.let { "&key=$it" }.orEmpty()
-        val body = http.get("https://www.googleapis.com/books/v1/volumes?q=isbn:$isbn$key") ?: return null
+        val key = apiKey?.takeIf { it.isNotBlank() }
+        val url = "https://www.googleapis.com/books/v1/volumes?q=isbn:$isbn" + key?.let { "&key=$it" }.orEmpty()
+        val body = http.get(url, if (key != null) androidHeaders else emptyMap()) ?: return null
         val info = json.decodeFromString<Response>(body).items.firstOrNull()?.volumeInfo ?: return null
         val title = info.title ?: return null
         return BookMetadata(

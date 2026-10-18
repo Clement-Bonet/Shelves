@@ -35,6 +35,17 @@ N'importe quel JDK 17 ou plus récent convient, y compris le Java 25 fourni avec
 2. Compiler : `./gradlew assembleDebug` ; tests unitaires : `./gradlew test`.
 3. Lancer sur un appareil ou un émulateur **avec Google Play** (nécessaire au scanner ; sinon, saisir l'ISBN).
 
+## Clé Google Books
+
+Facultative, à saisir dans les réglages de l'application. Dans la console Google Cloud, restreindre la clé :
+- **API** : Books API uniquement ;
+- **Applications Android** : package `fr.shelves` et empreinte SHA-1 du certificat de signature.
+  - Debug : `keytool -J-Duser.language=en -list -v -keystore %USERPROFILE%\.android\debug.keystore -alias androiddebugkey -storepass android`
+    (propre à chaque poste ; l'option `-J-Duser.language=en` contourne un bug d'affichage de keytool en français).
+  - Release : ajouter aussi l'empreinte de la clé de publication (ou celle de Google Play App Signing) le moment venu.
+
+L'application envoie elle-même les en-têtes `X-Android-Package` et `X-Android-Cert` exigés par cette restriction.
+
 ## Licence
 
 Code sous licence [MIT](LICENSE). Les données récupérées restent soumises aux conditions de leurs sources : catalogue de la BnF (licence ouverte Etalab, mention de la source), Google Books et Open Library.

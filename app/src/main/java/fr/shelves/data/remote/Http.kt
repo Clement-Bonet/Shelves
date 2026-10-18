@@ -14,10 +14,11 @@ class Http(
         .build(),
 ) {
     /** GET texte ; `null` sur 404, exception sur les autres erreurs. */
-    suspend fun get(url: String): String? = withContext(Dispatchers.IO) {
+    suspend fun get(url: String, headers: Map<String, String> = emptyMap()): String? = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url(url)
             .header("User-Agent", "Shelves/0.1 (Android)")
+            .apply { headers.forEach { (name, value) -> header(name, value) } }
             .build()
         client.newCall(request).execute().use { response ->
             when {

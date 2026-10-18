@@ -5,6 +5,7 @@ import fr.shelves.data.BackupManager
 import fr.shelves.data.BookRepository
 import fr.shelves.data.SettingsStore
 import fr.shelves.data.db.ShelvesDatabase
+import fr.shelves.data.remote.AppSignature
 import fr.shelves.data.remote.BnfClient
 import fr.shelves.data.remote.BookLookupService
 import fr.shelves.data.remote.GoogleBooksClient
@@ -34,7 +35,7 @@ class AppContainer(app: Application) {
         lookupService = BookLookupService(
             bnf = BnfClient(http),
             openLibrary = OpenLibraryClient(http, json),
-            googleBooks = GoogleBooksClient(http, json),
+            googleBooks = GoogleBooksClient(http, json, AppSignature.googleApiHeaders(app)),
         ),
         settings = settings,
     )
