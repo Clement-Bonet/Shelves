@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import com.google.mlkit.common.MlKitException
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
@@ -144,6 +145,13 @@ class AddBookViewModel(private val repository: BookRepository, initialShelfId: L
     )
 }
 
+private val unavailableCodes = setOf(
+    MlKitException.UNAVAILABLE,
+    MlKitException.CODE_SCANNER_UNAVAILABLE,
+    MlKitException.CODE_SCANNER_CAMERA_PERMISSION_NOT_GRANTED,
+    MlKitException.CODE_SCANNER_APP_NAME_UNAVAILABLE,
+)
+
 /** Ouvre le scanner de codes-barres de Google Play Services (aucune permission caméra à demander). */
 private fun scanBarcode(context: Context, onResult: (String) -> Unit, onError: (String) -> Unit) {
     val options = GmsBarcodeScannerOptions.Builder()
@@ -152,7 +160,15 @@ private fun scanBarcode(context: Context, onResult: (String) -> Unit, onError: (
     GmsBarcodeScanning.getClient(context, options)
         .startScan()
         .addOnSuccessListener { barcode -> barcode.rawValue?.let(onResult) }
-        .addOnFailureListener { onError("Scanner indisponible : saisissez le code à la main.") }
+        .addOnFailureListener { e ->
+            // Fermer le scanner n'est pas une erreur : selon la façon de le fermer, Google renvoie
+            // CODE_SCANNER_CANCELLED ou INTERNAL (bouton retour). On ne prévient que si le scanner
+            // ne peut vraiment pas fonctionner.
+            val code = (e as? MlKitException)?.errorCode
+            if (code == null || code in unavailableCodes) {
+                onError("Scanner indisponible : saisissez le code à la main.")
+            }
+        }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
