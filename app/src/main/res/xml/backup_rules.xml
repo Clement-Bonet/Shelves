@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sauvegarde automatique Android (Android 11 et moins) : la base et les préférences partent sur Google Drive. -->
+<full-backup-content>
+    <include domain="database" path="shelves.db" />
+    <include domain="file" path="datastore/" />
+</full-backup-content>
