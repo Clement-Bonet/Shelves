@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dossier temporaire où l'application photo dépose la couverture prise. -->
+<paths>
+    <cache-path name="captures" path="captures/" />
+</paths>

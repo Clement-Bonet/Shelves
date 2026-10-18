@@ -8,9 +8,10 @@ Sources de données : voir [docs/sources-de-donnees.md](docs/sources-de-donnees.
 
 - **Étagères** : regroupements de livres créés par l'utilisateur (un livre peut être sur plusieurs étagères).
 - **Ajout** : scan du code-barres EAN-13 / EAN-8 (scanner Google Play Services, sans permission caméra) ou saisie de l'ISBN.
-- **Recherche** : BnF (notice, série, résumé), Google Books et Open Library (résumé, couverture), interrogées en parallèle.
+- **Recherche** : BnF (notice, série, résumé) et Open Library (couverture), interrogées en parallèle ; Google Books en plus si l'utilisateur saisit sa propre clé.
+- **Couverture** : photo prise avec l'appareil photo du téléphone depuis la fiche du livre (aucune permission caméra demandée), redressée et réduite, stockée sur le téléphone.
 - **Séries** : à l'ajout d'un tome, les autres tomes de la même édition sont récupérés à la BnF ; chaque série affiche « x / y tomes possédés » et se coche tome par tome.
-- **Stockage local** : base Room ; sauvegarde automatique Android vers Google Drive, plus export/import JSON via le sélecteur de fichiers (Google Drive y figure).
+- **Stockage local** : base Room ; sauvegarde automatique Android vers Google Drive, plus export/import d'une archive ZIP (données + photos) via le sélecteur de fichiers (Google Drive y figure).
 - **Partage** : une étagère par SMS ou e-mail à un contact du téléphone, ou vers une autre application ; prêt d'un livre à un contact, et liste des prêts en cours.
 
 ## Organisation du code
@@ -37,7 +38,8 @@ N'importe quel JDK 17 ou plus récent convient, y compris le Java 25 fourni avec
 
 ## Clé Google Books
 
-Facultative, à saisir dans les réglages de l'application. Dans la console Google Cloud, restreindre la clé :
+Facultative, à saisir dans les réglages de l'application ; aucune clé n'est intégrée à l'application,
+et sans clé Google Books n'est pas interrogé. Dans la console Google Cloud, restreindre la clé :
 - **API** : Books API uniquement ;
 - **Applications Android** : package `com.katachilabs.shelves` et empreinte SHA-1 du certificat de signature.
   - Debug : `keytool -J-Duser.language=en -list -v -keystore %USERPROFILE%\.android\debug.keystore -alias androiddebugkey -storepass android`

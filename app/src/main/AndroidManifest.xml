@@ -36,6 +36,17 @@
             </intent-filter>
         </activity>
 
+        <!-- Partage du fichier temporaire avec l'application photo, pour la couverture. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <!-- Le module de scan est installé avec l'application plutôt qu'au premier scan. -->
         <meta-data
             android:name="com.google.mlkit.vision.DEPENDENCIES"

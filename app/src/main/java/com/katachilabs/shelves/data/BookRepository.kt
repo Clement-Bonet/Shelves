@@ -22,6 +22,7 @@ class BookRepository(
     private val db: ShelvesDatabase,
     private val lookupService: BookLookupService,
     private val settings: SettingsStore,
+    private val covers: CoverStore,
     private val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) {
     private val shelfDao = db.shelfDao()
@@ -78,7 +79,23 @@ class BookRepository(
     }
 
     suspend fun update(book: Book) = bookDao.update(book)
-    suspend fun delete(book: Book) = bookDao.delete(book)
+    suspend fun delete(book: Book) {
+        bookDao.delete(book)
+        covers.delete(book.coverUrl)
+    }
+
+    /** Enregistre la photo de couverture qui vient d'être prise ; l'ancienne photo éventuelle est supprimée. */
+    suspend fun saveCoverPhoto(book: Book) {
+        val reference = covers.saveCapture(book.id)
+        bookDao.update(book.copy(coverUrl = reference))
+        covers.delete(book.coverUrl)
+    }
+
+    /** Retire la photo : on revient à la couverture en ligne (Open Library) quand il y a un ISBN. */
+    suspend fun removeCoverPhoto(book: Book) {
+        bookDao.update(book.copy(coverUrl = book.isbn?.let { OpenLibraryClient.coverUrl(it) }))
+        covers.delete(book.coverUrl)
+    }
 
     suspend fun setOwned(book: Book, owned: Boolean, shelfId: Long?) = db.withTransaction {
         bookDao.update(book.copy(owned = owned))

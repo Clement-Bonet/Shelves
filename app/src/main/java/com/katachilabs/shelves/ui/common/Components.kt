@@ -35,6 +35,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import coil3.compose.SubcomposeAsyncImage
 import com.katachilabs.shelves.AppContainer
 import com.katachilabs.shelves.ShelvesApp
+import com.katachilabs.shelves.data.CoverStore
 
 /** ViewModel construit à partir du conteneur de l'application. */
 @Composable
@@ -43,7 +44,7 @@ inline fun <reified VM : ViewModel> appViewModel(crossinline create: (AppContain
     return viewModel(factory = viewModelFactory { initializer { create(app.container) } })
 }
 
-/** Couverture du livre, ou une icône quand il n'y en a pas. Format 2:3. */
+/** Couverture du livre (photo locale ou URL), ou une icône quand il n'y en a pas. Format 2:3. */
 @Composable
 fun Cover(url: String?, width: Dp, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(4.dp)
@@ -66,7 +67,7 @@ fun Cover(url: String?, width: Dp, modifier: Modifier = Modifier) {
             placeholder()
         } else {
             SubcomposeAsyncImage(
-                model = url,
+                model = CoverStore.model(LocalContext.current, url),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 loading = { placeholder() },

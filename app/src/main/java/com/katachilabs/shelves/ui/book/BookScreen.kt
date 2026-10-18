@@ -1,5 +1,6 @@
 package com.katachilabs.shelves.ui.book
 
+import android.content.ActivityNotFoundException
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -9,14 +10,17 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
@@ -51,6 +55,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.katachilabs.shelves.data.BookRepository
+import com.katachilabs.shelves.data.CoverStore
 import com.katachilabs.shelves.data.db.Book
 import com.katachilabs.shelves.data.db.Series
 import com.katachilabs.shelves.data.db.Shelf
@@ -76,7 +81,11 @@ data class BookUiState(
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class BookViewModel(private val repository: BookRepository, bookId: Long) : ViewModel() {
+class BookViewModel(
+    private val repository: BookRepository,
+    private val covers: CoverStore,
+    bookId: Long,
+) : ViewModel() {
     private val book = repository.book(bookId)
 
     val state = combine(
@@ -101,19 +110,50 @@ class BookViewModel(private val repository: BookRepository, bookId: Long) : View
     fun saveNotes(notes: String) = viewModelScope.launch { current?.let { repository.update(it.copy(notes = notes.ifBlank { null })) } }
     fun delete() = viewModelScope.launch { current?.let { repository.delete(it) } }
 
+    fun captureUri() = covers.captureUri()
+
+    /** Renvoie un message d'erreur, ou `null` si la photo est enregistrée. */
+    suspend fun saveCoverPhoto(): String? {
+        val book = current ?: return null
+        return try {
+            repository.saveCoverPhoto(book)
+            null
+        } catch (e: Exception) {
+            "Photo non enregistrée : ${e.message}"
+        }
+    }
+
+    fun removeCoverPhoto() = viewModelScope.launch { current?.let { repository.removeCoverPhoto(it) } }
+
     suspend fun refresh(): Boolean = current?.let { runCatching { repository.refresh(it) }.getOrDefault(false) } ?: false
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun BookScreen(bookId: Long, onBack: () -> Unit, onOpenSeries: (String) -> Unit) {
-    val viewModel = appViewModel { BookViewModel(it.repository, bookId) }
+    val viewModel = appViewModel { BookViewModel(it.repository, it.covers, bookId) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     var menuOpen by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
+
+    // L'application photo du téléphone prend la couverture : aucune permission caméra à demander.
+    val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { taken ->
+        if (taken) {
+            scope.launch {
+                viewModel.saveCoverPhoto()?.let { snackbar.showSnackbar(it) }
+            }
+        }
+    }
+    val takeCoverPhoto: () -> Unit = {
+        try {
+            takePicture.launch(viewModel.captureUri())
+        } catch (e: ActivityNotFoundException) {
+            scope.launch { snackbar.showSnackbar("Aucune application photo sur ce téléphone") }
+        }
+    }
 
     val pickContact = rememberLauncherForActivityResult(ActivityResultContracts.PickContact()) { uri ->
         if (uri != null) {
@@ -175,6 +215,17 @@ fun BookScreen(bookId: Long, onBack: () -> Unit, onOpenSeries: (String) -> Unit)
                     Text(book.title, style = MaterialTheme.typography.titleLarge)
                     book.subtitle?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                     book.authors?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                }
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedButton(onClick = takeCoverPhoto) {
+                    Icon(Icons.Outlined.PhotoCamera, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (CoverStore.isLocal(book.coverUrl)) "Reprendre la photo" else "Photographier la couverture")
+                }
+                if (CoverStore.isLocal(book.coverUrl)) {
+                    TextButton(onClick = viewModel::removeCoverPhoto) { Text("Retirer") }
                 }
             }
 

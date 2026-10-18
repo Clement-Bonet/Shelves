@@ -16,7 +16,9 @@ class BookLookupService(
 ) {
     suspend fun lookup(code: String, googleApiKey: String?): BookMetadata? = coroutineScope {
         val bnfResult = async { attempt("BnF") { bnf.findByIsbn(code) } }
-        val googleResult = async { attempt("Google Books") { googleBooks.findByIsbn(code, googleApiKey) } }
+        // Google Books est facultatif : sans clé de l'utilisateur, le quota anonyme est toujours épuisé.
+        val key = googleApiKey?.takeIf { it.isNotBlank() }
+        val googleResult = async { key?.let { attempt("Google Books") { googleBooks.findByIsbn(code, it) } } }
         val olResult = async { attempt("Open Library") { openLibrary.findByIsbn(code) } }
         merge(code, listOfNotNull(bnfResult.await(), googleResult.await(), olResult.await()))
     }

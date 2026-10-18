@@ -3,6 +3,7 @@ package com.katachilabs.shelves
 import android.app.Application
 import com.katachilabs.shelves.data.BackupManager
 import com.katachilabs.shelves.data.BookRepository
+import com.katachilabs.shelves.data.CoverStore
 import com.katachilabs.shelves.data.SettingsStore
 import com.katachilabs.shelves.data.db.ShelvesDatabase
 import com.katachilabs.shelves.data.remote.AppSignature
@@ -30,6 +31,7 @@ class AppContainer(app: Application) {
     private val database = ShelvesDatabase.create(app)
 
     val settings = SettingsStore(app)
+    val covers = CoverStore(app)
     val repository = BookRepository(
         db = database,
         lookupService = BookLookupService(
@@ -38,6 +40,7 @@ class AppContainer(app: Application) {
             googleBooks = GoogleBooksClient(http, json, AppSignature.googleApiHeaders(app)),
         ),
         settings = settings,
+        covers = covers,
     )
-    val backup = BackupManager(app, database, json)
+    val backup = BackupManager(app, database, covers, json)
 }

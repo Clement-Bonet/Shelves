@@ -64,7 +64,7 @@ class SettingsViewModel(private val settings: SettingsStore, private val backup:
         _messages.send(
             try {
                 val data = backup.export(uri)
-                "Sauvegarde terminée : ${data.shelves.size} étagères, ${data.books.size} livres"
+                "Sauvegarde terminée : ${data.shelves} étagères, ${data.books} livres, ${data.photos} photos"
             } catch (e: Exception) {
                 "Échec de la sauvegarde : ${e.message}"
             },
@@ -75,7 +75,7 @@ class SettingsViewModel(private val settings: SettingsStore, private val backup:
         _messages.send(
             try {
                 val data = backup.import(uri)
-                "Restauration terminée : ${data.shelves.size} étagères, ${data.books.size} livres"
+                "Restauration terminée : ${data.shelves} étagères, ${data.books} livres, ${data.photos} photos"
             } catch (e: Exception) {
                 "Fichier illisible : ${e.message}"
             },
@@ -95,7 +95,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     LaunchedEffect(Unit) { viewModel.messages.collect { snackbar.showSnackbar(it) } }
 
     // Le sélecteur de documents propose Google Drive : c'est ainsi que l'on sauvegarde sur Drive.
-    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         uri?.let(viewModel::export)
     }
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -123,15 +123,15 @@ fun SettingsScreen(onBack: () -> Unit) {
         ) {
             Text("Sauvegarde", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Exportez vos étagères dans un fichier JSON. Choisissez « Drive » dans le sélecteur pour l'enregistrer " +
+                "Exportez vos étagères et vos photos de couverture dans un fichier ZIP. Choisissez « Drive » dans le sélecteur pour l'enregistrer " +
                     "sur votre espace Google Drive. Android sauvegarde aussi automatiquement l'application sur Drive " +
                     "si la sauvegarde Google est activée sur le téléphone.",
                 style = MaterialTheme.typography.bodyMedium,
             )
-            Button(onClick = { exportLauncher.launch("shelves-${LocalDate.now()}.json") }, modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = { exportLauncher.launch("shelves-${LocalDate.now()}.zip") }, modifier = Modifier.fillMaxWidth()) {
                 Text("Exporter (Google Drive ou téléphone)")
             }
-            OutlinedButton(onClick = { importLauncher.launch(arrayOf("application/json", "application/octet-stream")) }, modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = { importLauncher.launch(arrayOf("application/zip", "application/json", "application/octet-stream")) }, modifier = Modifier.fillMaxWidth()) {
                 Text("Restaurer une sauvegarde")
             }
 
@@ -139,8 +139,8 @@ fun SettingsScreen(onBack: () -> Unit) {
 
             Text("Google Books", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Facultatif. Une clé gratuite (console Google Cloud, API « Books ») améliore les résumés et les couvertures ; " +
-                    "sans clé, le quota partagé est souvent épuisé.",
+                "Facultatif. Avec votre propre clé (console Google Cloud, API « Books »), Google Books complète les résumés " +
+                    "et les couvertures. Sans clé, Google Books n'est pas interrogé.",
                 style = MaterialTheme.typography.bodyMedium,
             )
             OutlinedTextField(
