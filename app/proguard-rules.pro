@@ -14,3 +14,7 @@
 -keep class com.google.android.gms.internal.mlkit_code_scanner.** { *; }
 -keep class com.google.android.gms.internal.mlkit_vision_barcode.** { *; }
 -keep class com.google.android.gms.internal.mlkit_common.** { *; }
+
+# Scanner de documents ML Kit (photo de couverture recadrée) : même précaution que pour le scanner de codes-barres.
+-keep class com.google.android.gms.internal.mlkit_vision_common.** { *; }
+-keep class com.google.android.gms.internal.mlkit_vision_document_scanner.** { *; }

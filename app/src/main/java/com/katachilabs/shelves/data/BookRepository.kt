@@ -94,6 +94,12 @@ class BookRepository(
     }
 
     /** Enregistre la photo de couverture qui vient d'être prise ; l'ancienne photo éventuelle est supprimée. */
+    /** Enregistre comme couverture une image recadrée par le scanner de documents. */
+    suspend fun saveScannedCover(book: Book, uri: android.net.Uri) {
+        covers.importCapture(uri)
+        saveCoverPhoto(book)
+    }
+
     suspend fun saveCoverPhoto(book: Book) {
         val reference = covers.saveCapture(book.id)
         bookDao.update(book.copy(coverUrl = reference))
@@ -168,6 +174,39 @@ class BookRepository(
         }
     }
 
+    // --- Opérations sur plusieurs livres ---
+
+    fun booksWithoutSeries() = bookDao.observeWithoutSeries()
+
+    /** Range les livres choisis dans une série (ou aucune) ; les synchronisations n'y toucheront plus. */
+    suspend fun assignToSeries(bookIds: List<Long>, seriesId: String?) {
+        if (bookIds.isNotEmpty()) bookDao.setSeries(bookIds, seriesId)
+    }
+
+    /** Range les livres dans [targetShelfId] ; ils quittent [fromShelfId] s'il est indiqué (déplacement). */
+    suspend fun moveToShelf(bookIds: List<Long>, targetShelfId: Long, fromShelfId: Long?) = db.withTransaction {
+        bookIds.forEach { shelfDao.addBook(ShelfBook(targetShelfId, it)) }
+        if (fromShelfId != null && fromShelfId != targetShelfId) shelfDao.removeBooks(fromShelfId, bookIds)
+    }
+
+    /** Supprime définitivement les livres choisis (et leurs photos de couverture). */
+    suspend fun deleteBooks(bookIds: List<Long>) {
+        val books = bookDao.getAll(bookIds)
+        bookDao.deleteAll(bookIds)
+        books.forEach { covers.delete(it.coverUrl) }
+    }
+
+    /** Supprime une série avec tous ses volumes ; renvoie le nombre de livres supprimés. */
+    suspend fun deleteSeries(seriesId: String): Int {
+        val volumes = bookDao.seriesVolumes(seriesId)
+        db.withTransaction {
+            bookDao.deleteAll(volumes.map { it.id })
+            seriesDao.deleteWithMerged(seriesId)
+        }
+        volumes.forEach { covers.delete(it.coverUrl) }
+        return volumes.size
+    }
+
     // --- Corrections manuelles ---
 
     /** Range un livre dans une série (ou aucune) avec son tome ; les synchronisations n'y toucheront plus. */
@@ -175,8 +214,9 @@ class BookRepository(
         bookDao.update(
             book.copy(
                 seriesId = seriesId,
-                volumeNumber = volumeNumber.takeIf { seriesId != null },
-                volumeLabel = volumeLabel?.trim()?.ifBlank { null }.takeIf { seriesId != null },
+                // Sans série, le tome est conservé : il resservira si le livre est rattaché à nouveau.
+                volumeNumber = volumeNumber ?: book.volumeNumber.takeIf { seriesId == null },
+                volumeLabel = volumeLabel?.trim()?.ifBlank { null } ?: book.volumeLabel.takeIf { seriesId == null },
                 seriesLocked = true,
             ),
         )

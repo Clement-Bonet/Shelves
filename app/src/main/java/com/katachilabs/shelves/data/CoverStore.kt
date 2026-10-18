@@ -27,6 +27,13 @@ class CoverStore(private val context: Context) {
         return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", captureFile)
     }
 
+    /** Copie une image reçue d'une autre application (scanner de documents) à la place de la dernière photo. */
+    suspend fun importCapture(uri: Uri) = withContext(Dispatchers.IO) {
+        val target = captureFile
+        context.contentResolver.openInputStream(uri)?.use { input -> target.outputStream().use { input.copyTo(it) } }
+            ?: throw IOException("Image illisible")
+    }
+
     /** Redresse, réduit et enregistre la dernière photo ; renvoie la référence à stocker sur le livre. */
     suspend fun saveCapture(bookId: Long): String = withContext(Dispatchers.IO) {
         val source = captureFile

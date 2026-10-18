@@ -50,6 +50,9 @@ interface ShelfDao {
     @Query("DELETE FROM shelf_books WHERE shelfId = :shelfId AND bookId = :bookId")
     suspend fun removeBook(shelfId: Long, bookId: Long)
 
+    @Query("DELETE FROM shelf_books WHERE shelfId = :shelfId AND bookId IN (:bookIds)")
+    suspend fun removeBooks(shelfId: Long, bookIds: List<Long>)
+
     @Query("SELECT * FROM shelves")
     suspend fun all(): List<Shelf>
 
@@ -118,6 +121,23 @@ interface BookDao {
     @Update
     suspend fun update(book: Book)
 
+    /** Range des livres choisis dans une série (ou aucune), à la main. */
+    @Query("UPDATE books SET seriesId = :seriesId, seriesLocked = 1 WHERE id IN (:bookIds)")
+    suspend fun setSeries(bookIds: List<Long>, seriesId: String?)
+
+    @Query("SELECT * FROM books WHERE id IN (:bookIds)")
+    suspend fun getAll(bookIds: List<Long>): List<Book>
+
+    @Query("SELECT * FROM books WHERE seriesId = :seriesId")
+    suspend fun seriesVolumes(seriesId: String): List<Book>
+
+    /** Livres possédés sans série, candidats pour être rattachés à une série existante. */
+    @Query("SELECT * FROM books WHERE seriesId IS NULL AND owned = 1 ORDER BY title COLLATE NOCASE")
+    fun observeWithoutSeries(): Flow<List<Book>>
+
+    @Query("DELETE FROM books WHERE id IN (:bookIds)")
+    suspend fun deleteAll(bookIds: List<Long>)
+
     /** Déplace tous les volumes d'une série dans une autre (fusion manuelle). */
     @Query("UPDATE books SET seriesId = :targetId, seriesLocked = 1 WHERE seriesId = :sourceId")
     suspend fun moveSeries(sourceId: String, targetId: String)
@@ -158,6 +178,10 @@ interface SeriesDao {
 
     @Upsert
     suspend fun upsert(series: Series)
+
+    /** Supprime une série et celles qui y avaient été fusionnées. */
+    @Query("DELETE FROM series WHERE id = :id OR mergedInto = :id")
+    suspend fun deleteWithMerged(id: String)
 
     @Query("SELECT * FROM series")
     suspend fun all(): List<Series>

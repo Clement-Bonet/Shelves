@@ -1,7 +1,12 @@
 package com.katachilabs.shelves.ui.book
 
+import android.app.Activity
 import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.ContextWrapper
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -54,6 +59,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
+import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
+import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import com.katachilabs.shelves.data.BookRepository
 import com.katachilabs.shelves.data.CoverStore
 import com.katachilabs.shelves.data.db.Book
@@ -130,10 +138,16 @@ class BookViewModel(
     fun captureUri() = covers.captureUri()
 
     /** Renvoie un message d'erreur, ou `null` si la photo est enregistrée. */
-    suspend fun saveCoverPhoto(): String? {
+    /** Photo prise par l'appareil photo (sans recadrage). Renvoie un message d'erreur, ou `null`. */
+    suspend fun saveCoverPhoto(): String? = saveCover { repository.saveCoverPhoto(it) }
+
+    /** Image recadrée par le scanner de documents. Renvoie un message d'erreur, ou `null`. */
+    suspend fun saveScannedCover(uri: Uri): String? = saveCover { repository.saveScannedCover(it, uri) }
+
+    private suspend fun saveCover(save: suspend (Book) -> Unit): String? {
         val book = current ?: return null
         return try {
-            repository.saveCoverPhoto(book)
+            save(book)
             null
         } catch (e: Exception) {
             "Photo non enregistrée : ${e.message}"
@@ -166,11 +180,30 @@ fun BookScreen(bookId: Long, onBack: () -> Unit, onOpenSeries: (String) -> Unit)
             }
         }
     }
-    val takeCoverPhoto: () -> Unit = {
+    val takePlainPhoto: () -> Unit = {
         try {
             takePicture.launch(viewModel.captureUri())
         } catch (e: ActivityNotFoundException) {
             scope.launch { snackbar.showSnackbar("Aucune application photo sur ce téléphone") }
+        }
+    }
+    // Le scanner de documents de Google détecte les bords du livre, recadre et redresse la photo.
+    val scanCover = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val uri = GmsDocumentScanningResult.fromActivityResultIntent(result.data)?.pages?.firstOrNull()?.imageUri
+            if (uri != null) scope.launch { viewModel.saveScannedCover(uri)?.let { snackbar.showSnackbar(it) } }
+        }
+    }
+    val takeCoverPhoto: () -> Unit = {
+        val activity = context.findActivity()
+        if (activity == null) {
+            takePlainPhoto()
+        } else {
+            GmsDocumentScanning.getClient(coverScannerOptions)
+                .getStartScanIntent(activity)
+                .addOnSuccessListener { sender -> scanCover.launch(IntentSenderRequest.Builder(sender).build()) }
+                // Scanner indisponible (appareil trop ancien, services Google absents) : simple photo.
+                .addOnFailureListener { takePlainPhoto() }
         }
     }
 
@@ -199,6 +232,11 @@ fun BookScreen(bookId: Long, onBack: () -> Unit, onOpenSeries: (String) -> Unit)
                                     val ok = viewModel.refresh()
                                     snackbar.showSnackbar(if (ok) "Fiche complétée" else "Aucune information supplémentaire")
                                 }
+                            })
+                            // Secours quand le scanner de documents de Google n'est pas disponible.
+                            DropdownMenuItem(text = { Text("Photo sans recadrage") }, onClick = {
+                                menuOpen = false
+                                takePlainPhoto()
                             })
                             DropdownMenuItem(text = { Text("Supprimer le livre") }, onClick = {
                                 menuOpen = false
@@ -370,4 +408,18 @@ private fun Notes(book: Book, onSave: (String) -> Unit) {
     if (notes != book.notes.orEmpty()) {
         TextButton(onClick = { onSave(notes) }) { Text("Enregistrer les notes") }
     }
+}
+
+/** Une seule page, recadrable et importable depuis la galerie, rendue en JPEG. */
+private val coverScannerOptions = GmsDocumentScannerOptions.Builder()
+    .setGalleryImportAllowed(true)
+    .setPageLimit(1)
+    .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
+    .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_BASE)
+    .build()
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
