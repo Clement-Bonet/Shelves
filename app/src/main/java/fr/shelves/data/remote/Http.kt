@@ -21,7 +21,7 @@ class Http(
             .build()
         client.newCall(request).execute().use { response ->
             when {
-                response.isSuccessful -> response.body?.string()
+                response.isSuccessful -> response.body.string()
                 response.code == 404 -> null
                 else -> throw IOException("HTTP ${response.code} sur $url")
             }
