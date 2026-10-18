@@ -34,3 +34,7 @@ N'importe quel JDK 17 ou plus récent convient, y compris le Java 25 fourni avec
 1. Ouvrir le dossier dans Android Studio.
 2. Compiler : `./gradlew assembleDebug` ; tests unitaires : `./gradlew test`.
 3. Lancer sur un appareil ou un émulateur **avec Google Play** (nécessaire au scanner ; sinon, saisir l'ISBN).
+
+## Licence
+
+Code sous licence [MIT](LICENSE). Les données récupérées restent soumises aux conditions de leurs sources : catalogue de la BnF (licence ouverte Etalab, mention de la source), Google Books et Open Library.
