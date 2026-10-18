@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "fr.shelves"
+    namespace = "com.katachilabs.shelves"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "fr.shelves"
+        applicationId = "com.katachilabs.shelves"
         minSdk = 26
         targetSdk = 36
         versionCode = 1

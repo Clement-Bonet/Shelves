@@ -16,7 +16,7 @@ Sources de données : voir [docs/sources-de-donnees.md](docs/sources-de-donnees.
 ## Organisation du code
 
 ```
-app/src/main/java/fr/shelves/
+app/src/main/java/com/katachilabs/shelves/
   ShelvesApp.kt          conteneur de dépendances
   MainActivity.kt        navigation
   data/db/               entités et DAO Room
@@ -39,7 +39,7 @@ N'importe quel JDK 17 ou plus récent convient, y compris le Java 25 fourni avec
 
 Facultative, à saisir dans les réglages de l'application. Dans la console Google Cloud, restreindre la clé :
 - **API** : Books API uniquement ;
-- **Applications Android** : package `fr.shelves` et empreinte SHA-1 du certificat de signature.
+- **Applications Android** : package `com.katachilabs.shelves` et empreinte SHA-1 du certificat de signature.
   - Debug : `keytool -J-Duser.language=en -list -v -keystore %USERPROFILE%\.android\debug.keystore -alias androiddebugkey -storepass android`
     (propre à chaque poste ; l'option `-J-Duser.language=en` contourne un bug d'affichage de keytool en français).
   - Release : ajouter aussi l'empreinte de la clé de publication (ou celle de Google Play App Signing) le moment venu.
