@@ -28,9 +28,8 @@ app/src/main/java/fr/shelves/
 
 ## Ouvrir et compiler
 
-1. Ouvrir le dossier dans Android Studio : il télécharge Gradle (`gradle/wrapper/gradle-wrapper.properties`) et le SDK.
-2. Le script `gradlew` et son jar ne sont pas versionnés pour l'instant : les générer avec `gradle wrapper` (terminal d'Android Studio), puis les committer.
-3. Lancer sur un appareil ou un émulateur **avec Google Play** (nécessaire au scanner ; sinon, saisir l'ISBN).
-4. Tests unitaires : `./gradlew test`.
-
-Le projet n'a pas encore été compilé : des corrections mineures sont probables au premier build.
+1. Ouvrir le dossier dans Android Studio.
+2. Gradle 8.11 ne tourne pas sous Java 25 (JDK intégré aux Android Studio récents) : utiliser un JDK 17 ou 21
+   (Settings > Build Tools > Gradle > Gradle JDK, ou `JAVA_HOME` en ligne de commande).
+3. Compiler : `./gradlew assembleDebug` ; tests unitaires : `./gradlew test`.
+4. Lancer sur un appareil ou un émulateur **avec Google Play** (nécessaire au scanner ; sinon, saisir l'ISBN).
