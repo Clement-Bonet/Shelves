@@ -14,6 +14,7 @@ import androidx.navigation.navArgument
 import com.katachilabs.shelves.data.BookRepository
 import com.katachilabs.shelves.ui.add.AddBookScreen
 import com.katachilabs.shelves.ui.book.BookScreen
+import com.katachilabs.shelves.ui.book.EditBookScreen
 import com.katachilabs.shelves.ui.loans.LoansScreen
 import com.katachilabs.shelves.ui.series.SeriesScreen
 import com.katachilabs.shelves.ui.settings.SettingsScreen
@@ -74,11 +75,16 @@ private fun ShelvesNavHost() {
             )
         }
         composable("book/{bookId}", arguments = listOf(navArgument("bookId") { type = NavType.LongType })) { entry ->
+            val bookId = entry.arguments!!.getLong("bookId")
             BookScreen(
-                bookId = entry.arguments!!.getLong("bookId"),
+                bookId = bookId,
                 onBack = back,
                 onOpenSeries = { openSeries(it, null) },
+                onEdit = { nav.navigate("book/$bookId/edit") },
             )
+        }
+        composable("book/{bookId}/edit", arguments = listOf(navArgument("bookId") { type = NavType.LongType })) { entry ->
+            EditBookScreen(bookId = entry.arguments!!.getLong("bookId"), onClose = back)
         }
         composable(
             "series/{seriesId}?shelfId={shelfId}",

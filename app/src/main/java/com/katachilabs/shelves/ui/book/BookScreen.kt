@@ -25,6 +25,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
@@ -161,7 +162,7 @@ class BookViewModel(
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun BookScreen(bookId: Long, onBack: () -> Unit, onOpenSeries: (String) -> Unit) {
+fun BookScreen(bookId: Long, onBack: () -> Unit, onOpenSeries: (String) -> Unit, onEdit: () -> Unit) {
     val viewModel = appViewModel { BookViewModel(it.repository, it.covers, bookId) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -223,6 +224,7 @@ fun BookScreen(bookId: Long, onBack: () -> Unit, onOpenSeries: (String) -> Unit)
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour") }
                 },
                 actions = {
+                    IconButton(onClick = onEdit) { Icon(Icons.Outlined.Edit, contentDescription = "Modifier le livre") }
                     Box {
                         IconButton(onClick = { menuOpen = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "Plus") }
                         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {

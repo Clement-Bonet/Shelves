@@ -209,6 +209,23 @@ class BookRepository(
 
     // --- Corrections manuelles ---
 
+    /**
+     * Enregistre une fiche modifiée à la main. Renvoie un message d'erreur, ou `null` si tout va bien.
+     * Les actualisations ne remplissent que les champs vides : les valeurs saisies sont conservées.
+     */
+    suspend fun saveEdited(edited: Book): String? {
+        val isbn = edited.isbn
+        if (isbn != null) {
+            val other = bookDao.findByIsbn(isbn)
+            if (other != null && other.id != edited.id) return "Un autre livre porte déjà cet ISBN : « ${other.title} »"
+        }
+        val original = bookDao.get(edited.id) ?: return "Livre introuvable"
+        val volumeChanged = edited.volumeNumber != original.volumeNumber || edited.volumeLabel != original.volumeLabel
+        // Un tome corrigé à la main ne doit plus être modifié par les synchronisations.
+        bookDao.update(if (volumeChanged) edited.copy(seriesLocked = true) else edited)
+        return null
+    }
+
     /** Range un livre dans une série (ou aucune) avec son tome ; les synchronisations n'y toucheront plus. */
     suspend fun setBookSeries(book: Book, seriesId: String?, volumeNumber: Double?, volumeLabel: String?) =
         bookDao.update(
