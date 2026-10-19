@@ -52,6 +52,7 @@ import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import com.katachilabs.shelves.data.BookRepository
+import com.katachilabs.shelves.data.remote.userMessage
 import com.katachilabs.shelves.data.db.Book
 import com.katachilabs.shelves.data.db.Shelf
 import com.katachilabs.shelves.data.remote.BookMetadata
@@ -103,8 +104,8 @@ class AddBookViewModel(private val repository: BookRepository, initialShelfId: L
         }
         _state.update { it.copy(input = code, status = LookupStatus.Loading) }
         viewModelScope.launch {
+            val existing = repository.findByCode(code)
             val status = try {
-                val existing = repository.findByCode(code)
                 val meta = repository.lookup(code)
                 when {
                     meta != null -> LookupStatus.Found(meta, existing)
@@ -112,7 +113,9 @@ class AddBookViewModel(private val repository: BookRepository, initialShelfId: L
                     else -> LookupStatus.NotFound(code)
                 }
             } catch (e: Exception) {
-                LookupStatus.Error("Recherche impossible : ${e.message}")
+                // Hors connexion, un livre déjà connu reste affichable tel qu'il est enregistré.
+                if (existing != null) LookupStatus.Found(existing.toMetadata(), existing)
+                else LookupStatus.Error(e.userMessage("Recherche impossible"))
             }
             _state.update { it.copy(status = status) }
         }

@@ -3,6 +3,7 @@ package com.katachilabs.shelves.data
 import android.util.Log
 import androidx.room.withTransaction
 import com.katachilabs.shelves.data.db.Book
+import com.katachilabs.shelves.data.db.DismissedVolume
 import com.katachilabs.shelves.data.db.Series
 import com.katachilabs.shelves.data.db.Shelf
 import com.katachilabs.shelves.data.db.ShelfBook
@@ -29,6 +30,7 @@ class BookRepository(
     private val shelfDao = db.shelfDao()
     private val bookDao = db.bookDao()
     private val seriesDao = db.seriesDao()
+    private val dismissedDao = db.dismissedDao()
 
     // --- Lecture ---
 
@@ -88,18 +90,15 @@ class BookRepository(
     }
 
     suspend fun update(book: Book) = bookDao.update(book)
-    suspend fun delete(book: Book) {
-        bookDao.delete(book)
-        covers.delete(book.coverUrl)
-    }
+    suspend fun delete(book: Book) = deleteBooks(listOf(book.id))
 
-    /** Enregistre la photo de couverture qui vient d'être prise ; l'ancienne photo éventuelle est supprimée. */
     /** Enregistre comme couverture une image recadrée par le scanner de documents. */
     suspend fun saveScannedCover(book: Book, uri: android.net.Uri) {
         covers.importCapture(uri)
         saveCoverPhoto(book)
     }
 
+    /** Enregistre la photo de couverture qui vient d'être prise ; l'ancienne photo éventuelle est supprimée. */
     suspend fun saveCoverPhoto(book: Book) {
         val reference = covers.saveCapture(book.id)
         bookDao.update(book.copy(coverUrl = reference))
@@ -144,9 +143,12 @@ class BookRepository(
         val volumes = (listOf(series) + seriesDao.mergedInto(seriesId))
             .filter { it.bnfRecordId != null || !it.id.startsWith(MANUAL_PREFIX) }
             .flatMap { lookupService.seriesVolumes(it.bnfTitle ?: it.title, it.bnfPublisher ?: it.publisher, it.bnfRecordId) }
+        val dismissed = dismissedDao.keys().toSet()
         var added = 0
         db.withTransaction {
             for (volume in volumes) {
+                // Tome supprimé par l'utilisateur (doublon d'édition, par exemple) : on ne le rajoute pas.
+                if (volume.isbn in dismissed || volume.bnfArk in dismissed) continue
                 val existing = volume.isbn?.let { bookDao.findByIsbn(it) } ?: volume.bnfArk?.let { bookDao.findByArk(it) }
                 if (existing != null) {
                     bookDao.update(existing.mergedWith(volume, seriesId))
@@ -192,15 +194,29 @@ class BookRepository(
     /** Supprime définitivement les livres choisis (et leurs photos de couverture). */
     suspend fun deleteBooks(bookIds: List<Long>) {
         val books = bookDao.getAll(bookIds)
-        bookDao.deleteAll(bookIds)
+        db.withTransaction {
+            bookDao.deleteAll(bookIds)
+            // Les tomes de série supprimés ne doivent pas revenir à la prochaine synchronisation.
+            dismissedDao.insertAll(
+                books.filter { it.seriesId != null }.mapNotNull { book ->
+                    (book.isbn ?: book.bnfArk)?.let { DismissedVolume(it, book.seriesId) }
+                },
+            )
+        }
         books.forEach { covers.delete(it.coverUrl) }
     }
+
+    fun dismissedCount(seriesId: String) = dismissedDao.observeCount(seriesId)
+
+    /** Oublie les tomes supprimés de la série : la prochaine synchronisation les rajoutera. */
+    suspend fun restoreDismissed(seriesId: String) = dismissedDao.clearSeries(seriesId)
 
     /** Supprime une série avec tous ses volumes ; renvoie le nombre de livres supprimés. */
     suspend fun deleteSeries(seriesId: String): Int {
         val volumes = bookDao.seriesVolumes(seriesId)
         db.withTransaction {
             bookDao.deleteAll(volumes.map { it.id })
+            dismissedDao.clearSeries(seriesId)
             seriesDao.deleteWithMerged(seriesId)
         }
         volumes.forEach { covers.delete(it.coverUrl) }

@@ -3,6 +3,8 @@ package com.katachilabs.shelves.ui.shelf
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -11,8 +13,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -23,6 +29,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -44,6 +51,7 @@ import com.katachilabs.shelves.data.BookRepository
 import com.katachilabs.shelves.data.db.Book
 import com.katachilabs.shelves.data.db.Series
 import com.katachilabs.shelves.data.db.Shelf
+import com.katachilabs.shelves.data.remote.normalizedKey
 import com.katachilabs.shelves.ui.common.ConfirmDialog
 import com.katachilabs.shelves.ui.common.Cover
 import com.katachilabs.shelves.ui.common.OwnedIcon
@@ -54,6 +62,7 @@ import com.katachilabs.shelves.ui.common.sendEmail
 import com.katachilabs.shelves.ui.common.sendSms
 import com.katachilabs.shelves.ui.common.shareText
 import com.katachilabs.shelves.ui.common.shelfShareText
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -63,23 +72,50 @@ import kotlinx.coroutines.launch
 sealed interface ShelfItem {
     val key: String
     val sortTitle: String
+    val sortAuthor: String
+    val addedAt: Long
+
+    /** Vrai si le titre, les auteurs, l'ISBN (ou ceux d'un tome de la série) contiennent la recherche. */
+    fun matches(query: String): Boolean
 
     data class SeriesItem(val series: Series, val owned: Int, val total: Int, val inShelf: List<Book>) : ShelfItem {
         override val key = "s:${series.id}"
-        override val sortTitle = series.title.lowercase()
+        override val sortTitle = series.title.normalizedKey()
+        override val sortAuthor = inShelf.firstNotNullOfOrNull { it.authors }.orEmpty().normalizedKey()
+        override val addedAt = inShelf.maxOfOrNull { it.addedAt } ?: 0L
         val coverUrl = inShelf.minByOrNull { it.volumeNumber ?: Double.MAX_VALUE }?.coverUrl
+        override fun matches(query: String) =
+            series.title.normalizedKey().contains(query) || series.publisher.orEmpty().normalizedKey().contains(query) ||
+                inShelf.any { it.matches(query) }
     }
 
     data class BookItem(val book: Book) : ShelfItem {
         override val key = "b:${book.id}"
-        override val sortTitle = book.title.lowercase()
+        override val sortTitle = book.title.normalizedKey()
+        override val sortAuthor = book.authors.orEmpty().normalizedKey()
+        override val addedAt = book.addedAt
+        override fun matches(query: String) = book.matches(query)
     }
 }
 
-data class ShelfUiState(val shelf: Shelf?, val items: List<ShelfItem>)
+private fun Book.matches(query: String) =
+    title.normalizedKey().contains(query) || subtitle.orEmpty().normalizedKey().contains(query) ||
+        authors.orEmpty().normalizedKey().contains(query) || isbn.orEmpty().contains(query)
+
+enum class ShelfSort(val label: String) {
+    Title("Titre"),
+    Author("Auteur"),
+    Recent("Ajout le plus récent"),
+}
+
+/** [allItems] : tout le contenu (pour le partage) ; [items] : ce qui est affiché après recherche et tri. */
+data class ShelfUiState(val shelf: Shelf?, val allItems: List<ShelfItem>, val items: List<ShelfItem>)
 
 class ShelfViewModel(private val repository: BookRepository, private val shelfId: Long) : ViewModel() {
-    val state = combine(
+    val query = MutableStateFlow("")
+    val sort = MutableStateFlow(ShelfSort.Title)
+
+    private val content = combine(
         repository.shelfOrVirtual(shelfId),
         repository.booksInShelf(shelfId),
         repository.allSeries(),
@@ -92,7 +128,21 @@ class ShelfViewModel(private val repository: BookRepository, private val shelfId
             val s = statsById[id]
             ShelfItem.SeriesItem(seriesById.getValue(id), owned = s?.owned ?: 0, total = s?.total ?: volumes.size, inShelf = volumes)
         } + standalone.map { ShelfItem.BookItem(it) }
-        ShelfUiState(shelf, items.sortedBy { it.sortTitle })
+        shelf to items
+    }
+
+    val state = combine(content, query, sort) { (shelf, items), query, sort ->
+        val key = query.normalizedKey()
+        val visible = items
+            .filter { key.isEmpty() || it.matches(key) }
+            .let { list ->
+                when (sort) {
+                    ShelfSort.Title -> list.sortedBy { it.sortTitle }
+                    ShelfSort.Author -> list.sortedWith(compareBy({ it.sortAuthor.ifEmpty { "￿" } }, { it.sortTitle }))
+                    ShelfSort.Recent -> list.sortedByDescending { it.addedAt }
+                }
+            }
+        ShelfUiState(shelf, items.sortedBy { it.sortTitle }, visible)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun rename(name: String, description: String) = viewModelScope.launch {
@@ -104,13 +154,13 @@ class ShelfViewModel(private val repository: BookRepository, private val shelfId
     suspend fun shareText(): String {
         val current = state.value ?: return ""
         val shelf = current.shelf ?: return ""
-        val books = current.items.flatMap { item ->
+        val books = current.allItems.flatMap { item ->
             when (item) {
                 is ShelfItem.SeriesItem -> item.inShelf
                 is ShelfItem.BookItem -> listOf(item.book)
             }
         }
-        val series = current.items.filterIsInstance<ShelfItem.SeriesItem>().map { it.series }
+        val series = current.allItems.filterIsInstance<ShelfItem.SeriesItem>().map { it.series }
         val volumes = series.associate { it.id to repository.seriesVolumes(it.id).first() }
         return shelfShareText(shelf, books, series.associateBy { it.id }, volumes)
     }
@@ -128,6 +178,8 @@ fun ShelfScreen(
     val viewModel = appViewModel { ShelfViewModel(it.repository, shelfId) }
     val virtual = shelfId == BookRepository.UNSHELVED_ID
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val query by viewModel.query.collectAsStateWithLifecycle()
+    val sort by viewModel.sort.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var menuOpen by remember { mutableStateOf(false) }
@@ -196,10 +248,10 @@ fun ShelfScreen(
             )
         },
     ) { padding ->
-        val items = state?.items
+        val current = state
         when {
-            items == null -> Unit
-            items.isEmpty() -> Box(Modifier.fillMaxSize().padding(padding).padding(32.dp), contentAlignment = Alignment.Center) {
+            current == null -> Unit
+            current.allItems.isEmpty() -> Box(Modifier.fillMaxSize().padding(padding).padding(32.dp), contentAlignment = Alignment.Center) {
                 Text(
                     if (virtual) "Tous vos livres sont rangés dans une étagère."
                     else "Étagère vide. Scannez le code-barres d'un livre ou saisissez son ISBN pour l'ajouter.",
@@ -207,11 +259,26 @@ fun ShelfScreen(
                     style = MaterialTheme.typography.bodyLarge,
                 )
             }
-            else -> LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(bottom = 96.dp)) {
-                items(items, key = { it.key }) { item ->
-                    when (item) {
-                        is ShelfItem.SeriesItem -> SeriesRow(item) { onOpenSeries(item.series.id) }
-                        is ShelfItem.BookItem -> BookRow(item.book) { onOpenBook(item.book.id) }
+            else -> Column(Modifier.fillMaxSize().padding(padding)) {
+                SearchAndSortBar(
+                    query = query,
+                    onQueryChange = { viewModel.query.value = it },
+                    sort = sort,
+                    onSortChange = { viewModel.sort.value = it },
+                )
+                if (current.items.isEmpty()) {
+                    Text(
+                        "Aucun livre ne correspond à « $query ».",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(24.dp),
+                    )
+                }
+                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
+                    items(current.items, key = { it.key }) { item ->
+                        when (item) {
+                            is ShelfItem.SeriesItem -> SeriesRow(item) { onOpenSeries(item.series.id) }
+                            is ShelfItem.BookItem -> BookRow(item.book) { onOpenBook(item.book.id) }
+                        }
                     }
                 }
             }
@@ -283,4 +350,47 @@ fun BookRow(book: Book, onClick: () -> Unit) {
         trailingContent = { OwnedIcon(book.owned) },
         modifier = Modifier.clickable(onClick = onClick),
     )
+}
+
+/** Recherche dans l'étagère (titre, auteur, ISBN, série) et choix du tri. */
+@Composable
+private fun SearchAndSortBar(query: String, onQueryChange: (String) -> Unit, sort: ShelfSort, onSortChange: (ShelfSort) -> Unit) {
+    var sortMenuOpen by remember { mutableStateOf(false) }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+    ) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            placeholder = { Text("Titre, auteur, ISBN…", maxLines = 1) },
+            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+            trailingIcon = {
+                if (query.isNotEmpty()) {
+                    IconButton(onClick = { onQueryChange("") }) { Icon(Icons.Filled.Clear, contentDescription = "Effacer la recherche") }
+                }
+            },
+            singleLine = true,
+            modifier = Modifier.weight(1f),
+        )
+        Box {
+            IconButton(onClick = { sortMenuOpen = true }) {
+                Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Trier : ${sort.label}")
+            }
+            DropdownMenu(expanded = sortMenuOpen, onDismissRequest = { sortMenuOpen = false }) {
+                ShelfSort.entries.forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(option.label) },
+                        leadingIcon = {
+                            if (option == sort) Icon(Icons.Filled.Check, contentDescription = "Tri actuel")
+                        },
+                        onClick = {
+                            sortMenuOpen = false
+                            onSortChange(option)
+                        },
+                    )
+                }
+            }
+        }
+    }
 }

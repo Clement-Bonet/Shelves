@@ -45,6 +45,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.katachilabs.shelves.data.BookRepository
+import com.katachilabs.shelves.data.remote.userMessage
 import com.katachilabs.shelves.data.db.Book
 import com.katachilabs.shelves.ui.common.BookPickerDialog
 import com.katachilabs.shelves.ui.common.ConfirmDialog
@@ -99,7 +100,7 @@ class SeriesViewModel(
                     else -> "$added tomes ajoutés"
                 }
             } catch (e: Exception) {
-                "Synchronisation impossible : ${e.message}"
+                e.userMessage("Synchronisation impossible")
             }
             _syncing.value = false
             _messages.send(message)
@@ -154,6 +155,14 @@ class SeriesViewModel(
         _messages.send(plural(bookIds.size, "livre supprimé", "livres supprimés"))
     }
 
+    val dismissedCount = repository.dismissedCount(seriesId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
+    /** Les tomes supprimés redeviennent synchronisables : on relance aussitôt la synchronisation. */
+    fun restoreDismissed() = viewModelScope.launch {
+        repository.restoreDismissed(seriesId)
+        sync()
+    }
+
     fun deleteSeries(onDone: () -> Unit) = viewModelScope.launch {
         repository.deleteSeries(seriesId)
         onDone()
@@ -189,6 +198,7 @@ fun SeriesScreen(
     val otherSeries by viewModel.otherSeries.collectAsStateWithLifecycle()
     val shelves by viewModel.shelves.collectAsStateWithLifecycle()
     val booksWithoutSeries by viewModel.booksWithoutSeries.collectAsStateWithLifecycle()
+    val dismissedCount by viewModel.dismissedCount.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     var menuOpen by remember { mutableStateOf(false) }
     var dialog by remember { mutableStateOf<SeriesDialog?>(null) }
@@ -257,6 +267,9 @@ fun SeriesScreen(
                                 MenuEntry("Renommer la série") { menuOpen = false; dialog = SeriesDialog.Rename }
                                 MenuEntry("Fusionner dans une autre série…") { menuOpen = false; dialog = SeriesDialog.Merge }
                                 MenuEntry("Supprimer la série…") { menuOpen = false; dialog = SeriesDialog.DeleteSeries }
+                                if (dismissedCount > 0) {
+                                    MenuEntry("Réafficher les tomes supprimés ($dismissedCount)") { menuOpen = false; viewModel.restoreDismissed() }
+                                }
                             }
                         }
                     },
@@ -385,8 +398,8 @@ fun SeriesScreen(
         )
         is SeriesDialog.DeleteBooks -> ConfirmDialog(
             title = if (d.bookIds.size == 1) "Supprimer ce tome ?" else "Supprimer ces ${d.bookIds.size} tomes ?",
-            message = "Ils seront retirés de toutes les étagères, avec leurs photos. Une prochaine synchronisation " +
-                "avec la BnF pourra rajouter à la série les tomes non possédés.",
+            message = "Ils seront retirés de toutes les étagères, avec leurs photos. La synchronisation avec la BnF " +
+                "ne les rajoutera pas ; le menu de la série permet de les faire revenir.",
             confirmLabel = "Supprimer",
             onDismiss = { dialog = null },
             onConfirm = {

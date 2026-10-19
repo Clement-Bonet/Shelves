@@ -7,15 +7,16 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [Shelf::class, Series::class, Book::class, ShelfBook::class],
-    version = 2,
-    autoMigrations = [AutoMigration(from = 1, to = 2)],
+    entities = [Shelf::class, Series::class, Book::class, ShelfBook::class, DismissedVolume::class],
+    version = 3,
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)],
     exportSchema = true,
 )
 abstract class ShelvesDatabase : RoomDatabase() {
     abstract fun shelfDao(): ShelfDao
     abstract fun bookDao(): BookDao
     abstract fun seriesDao(): SeriesDao
+    abstract fun dismissedDao(): DismissedVolumeDao
 
     companion object {
         const val NAME = "shelves.db"

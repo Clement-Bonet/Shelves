@@ -33,6 +33,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -89,6 +91,9 @@ fun SettingsScreen(onBack: () -> Unit) {
     val viewModel = appViewModel { SettingsViewModel(it.settings, it.backup) }
     val savedKey by viewModel.googleKey.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
+    val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
+    val versionName = remember { context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty() }
     var key by remember(savedKey) { mutableStateOf(savedKey.orEmpty()) }
     var pendingImport by remember { mutableStateOf<Uri?>(null) }
 
@@ -158,6 +163,8 @@ fun SettingsScreen(onBack: () -> Unit) {
                 "Données : catalogue général de la BnF (licence ouverte), Google Books, Open Library.",
                 style = MaterialTheme.typography.bodySmall,
             )
+            TextButton(onClick = { uriHandler.openUri(PRIVACY_POLICY_URL) }) { Text("Politique de confidentialité") }
+            Text("Shelves $versionName", style = MaterialTheme.typography.bodySmall)
         }
     }
 
@@ -174,3 +181,7 @@ fun SettingsScreen(onBack: () -> Unit) {
         )
     }
 }
+
+/** Page publique exigée par le Play Store ; le texte source est dans docs/ du dépôt. */
+private const val PRIVACY_POLICY_URL =
+    "https://github.com/Clement-Bonet/Shelves/blob/main/docs/politique-de-confidentialite.md"

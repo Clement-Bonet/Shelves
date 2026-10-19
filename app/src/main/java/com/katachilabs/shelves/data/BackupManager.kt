@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.room.withTransaction
 import com.katachilabs.shelves.data.db.Book
+import com.katachilabs.shelves.data.db.DismissedVolume
 import com.katachilabs.shelves.data.db.Series
 import com.katachilabs.shelves.data.db.Shelf
 import com.katachilabs.shelves.data.db.ShelfBook
@@ -20,12 +21,14 @@ import java.util.zip.ZipOutputStream
 
 @Serializable
 data class BackupData(
-    val version: Int = 2,
+    val version: Int = 3,
     val exportedAt: Long = System.currentTimeMillis(),
     val shelves: List<Shelf>,
     val series: List<Series>,
     val books: List<Book>,
     val shelfBooks: List<ShelfBook>,
+    /** Tomes supprimés à ne pas rajouter (absent des sauvegardes antérieures à la version 3). */
+    val dismissed: List<DismissedVolume> = emptyList(),
 )
 
 /**
@@ -47,6 +50,7 @@ class BackupManager(
             series = db.seriesDao().all(),
             books = db.bookDao().all(),
             shelfBooks = db.shelfDao().allLinks(),
+            dismissed = db.dismissedDao().all(),
         )
         val photos = covers.allFiles()
         val out = context.contentResolver.openOutputStream(uri, "wt") ?: throw IOException("Impossible d'écrire le fichier")
@@ -86,10 +90,12 @@ class BackupManager(
             db.shelfDao().deleteAll()
             db.bookDao().deleteAll()
             db.seriesDao().deleteAll()
+            db.dismissedDao().deleteAll()
             db.seriesDao().insertAll(data.series)
             db.bookDao().insertAll(data.books)
             db.shelfDao().insertAll(data.shelves)
             db.shelfDao().insertAllLinks(data.shelfBooks)
+            db.dismissedDao().insertAll(data.dismissed)
         }
         covers.replaceAll(photos)
         Result(data.shelves.size, data.books.size, photos.size)

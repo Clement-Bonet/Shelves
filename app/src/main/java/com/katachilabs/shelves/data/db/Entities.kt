@@ -105,6 +105,17 @@ data class ShelfBook(
     val addedAt: Long = System.currentTimeMillis(),
 )
 
+/**
+ * Tome supprimé par l'utilisateur : les synchronisations avec la BnF ne le rajoutent plus.
+ * La clé est l'ISBN, ou à défaut l'adresse de la notice BnF.
+ */
+@Serializable
+@Entity(tableName = "dismissed_volumes", indices = [Index(value = ["seriesId"])])
+data class DismissedVolume(
+    @PrimaryKey val key: String,
+    val seriesId: String?,
+)
+
 data class ShelfWithCount(
     @Embedded val shelf: Shelf,
     val bookCount: Int,

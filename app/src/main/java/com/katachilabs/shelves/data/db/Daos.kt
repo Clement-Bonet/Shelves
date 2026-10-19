@@ -192,3 +192,24 @@ interface SeriesDao {
     @Query("DELETE FROM series")
     suspend fun deleteAll()
 }
+
+@Dao
+interface DismissedVolumeDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(volumes: List<DismissedVolume>)
+
+    @Query("SELECT `key` FROM dismissed_volumes")
+    suspend fun keys(): List<String>
+
+    @Query("SELECT COUNT(*) FROM dismissed_volumes WHERE seriesId = :seriesId")
+    fun observeCount(seriesId: String): Flow<Int>
+
+    @Query("DELETE FROM dismissed_volumes WHERE seriesId = :seriesId")
+    suspend fun clearSeries(seriesId: String)
+
+    @Query("SELECT * FROM dismissed_volumes")
+    suspend fun all(): List<DismissedVolume>
+
+    @Query("DELETE FROM dismissed_volumes")
+    suspend fun deleteAll()
+}

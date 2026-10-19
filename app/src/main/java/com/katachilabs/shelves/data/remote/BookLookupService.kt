@@ -14,25 +14,52 @@ class BookLookupService(
     private val openLibrary: OpenLibraryClient,
     private val googleBooks: GoogleBooksClient,
 ) {
+    /**
+     * Renvoie la fiche fusionnée, ou `null` si aucune source ne connaît le code.
+     * Lève [NoNetworkException] quand aucune source n'a pu être jointe : sans réseau, « inconnu » serait trompeur.
+     */
     suspend fun lookup(code: String, googleApiKey: String?): BookMetadata? = coroutineScope {
-        val bnfResult = async { attempt("BnF") { bnf.findByIsbn(code) } }
+        val failures = java.util.Collections.synchronizedList(mutableListOf<Exception>())
+        val bnfResult = async {
+            attempt("BnF", failures) {
+                try {
+                    bnf.findByIsbn(code)
+                } catch (e: java.io.IOException) {
+                    throw if (e.isNetworkFailure()) e else BnfUnavailableException(e)
+                }
+            }
+        }
         // Google Books est facultatif : sans clé de l'utilisateur, le quota anonyme est toujours épuisé.
         val key = googleApiKey?.takeIf { it.isNotBlank() }
-        val googleResult = async { key?.let { attempt("Google Books") { googleBooks.findByIsbn(code, it) } } }
-        val olResult = async { attempt("Open Library") { openLibrary.findByIsbn(code) } }
-        merge(code, listOfNotNull(bnfResult.await(), googleResult.await(), olResult.await()))
+        val googleResult = async { key?.let { attempt("Google Books", failures) { googleBooks.findByIsbn(code, it) } } }
+        val olResult = async { attempt("Open Library", failures) { openLibrary.findByIsbn(code) } }
+        val results = listOfNotNull(bnfResult.await(), googleResult.await(), olResult.await())
+        val sourcesTried = if (key != null) 3 else 2
+        if (results.isEmpty() && failures.size >= sourcesTried && failures.all { it.isNetworkFailure() }) {
+            throw NoNetworkException(failures.first())
+        }
+        if (results.isEmpty() && failures.any { it is BnfUnavailableException }) {
+            // La BnF, source principale, n'a pas répondu : « livre inconnu » serait faux.
+            throw failures.first { it is BnfUnavailableException }
+        }
+        merge(code, results)
     }
 
     suspend fun seriesVolumes(title: String, publisher: String?, bnfRecordId: String?): List<BookMetadata> =
-        bnf.findSeriesVolumes(title, publisher, bnfRecordId)
+        try {
+            bnf.findSeriesVolumes(title, publisher, bnfRecordId)
+        } catch (e: java.io.IOException) {
+            if (e.isNetworkFailure()) throw NoNetworkException(e) else throw e
+        }
 
-    private suspend fun <T> attempt(source: String, block: suspend () -> T?): T? =
+    private suspend fun <T> attempt(source: String, failures: MutableList<Exception>, block: suspend () -> T?): T? =
         try {
             block()
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
             Log.w("Shelves", "Recherche $source en échec", e)
+            failures += e
             null
         }
 

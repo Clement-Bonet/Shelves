@@ -64,6 +64,7 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import com.katachilabs.shelves.data.BookRepository
+import com.katachilabs.shelves.data.remote.userMessage
 import com.katachilabs.shelves.data.CoverStore
 import com.katachilabs.shelves.data.db.Book
 import com.katachilabs.shelves.data.db.Series
@@ -157,7 +158,15 @@ class BookViewModel(
 
     fun removeCoverPhoto() = viewModelScope.launch { current?.let { repository.removeCoverPhoto(it) } }
 
-    suspend fun refresh(): Boolean = current?.let { runCatching { repository.refresh(it) }.getOrDefault(false) } ?: false
+    /** Relance la recherche en ligne ; renvoie le message à afficher. */
+    suspend fun refresh(): String {
+        val book = current ?: return ""
+        return try {
+            if (repository.refresh(book)) "Fiche complétée" else "Aucune information supplémentaire"
+        } catch (e: Exception) {
+            e.userMessage("Actualisation impossible")
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -231,8 +240,7 @@ fun BookScreen(bookId: Long, onBack: () -> Unit, onOpenSeries: (String) -> Unit,
                             DropdownMenuItem(text = { Text("Actualiser depuis les sources") }, onClick = {
                                 menuOpen = false
                                 scope.launch {
-                                    val ok = viewModel.refresh()
-                                    snackbar.showSnackbar(if (ok) "Fiche complétée" else "Aucune information supplémentaire")
+                                    snackbar.showSnackbar(viewModel.refresh())
                                 }
                             })
                             // Secours quand le scanner de documents de Google n'est pas disponible.
