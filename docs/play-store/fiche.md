@@ -60,7 +60,6 @@ Application de type « Référence, actualités ou éducation ». Réponses : pa
 
 | Élément | Format | Contenu suggéré |
 |---|---|---|
-| Icône | 512 × 512, PNG 32 bits | Icône définitive de l'application |
-| Bannière | 1 024 × 500, PNG ou JPEG | Nom + quelques couvertures sur une étagère |
+| Icône | 512 × 512, PNG sans transparence | ✅ [icone-512.png](icone-512.png) |
+| Bannière | 1 024 × 500, PNG ou JPEG | ✅ [banniere-1024x500.png](banniere-1024x500.png) |
 | Captures téléphone | 2 à 8, 1 080 × 1 920 minimum | Accueil, étagère, scan, fiche livre, série avec tomes cochés, prêts |
-```

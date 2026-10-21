@@ -11,7 +11,8 @@ plugins {
 // Clé de publication : chemin et mots de passe dans keystore.properties, à la racine du projet,
 // jamais versionné (voir keystore.properties.example). Sans ce fichier, la release n'est pas signée.
 val keystoreProperties = Properties().apply {
-    rootProject.file("keystore.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+    // Lu en UTF-8 : par défaut, Java lit les .properties en Latin-1 et abîmerait un chemin accentué (« Clés »).
+    rootProject.file("keystore.properties").takeIf { it.exists() }?.reader(Charsets.UTF_8)?.use { load(it) }
 }
 
 android {

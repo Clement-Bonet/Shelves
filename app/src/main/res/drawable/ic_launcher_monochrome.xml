@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Version monochrome pour les icônes thématiques d'Android 13+ : mêmes formes que le premier plan,
+    d'une seule couleur (le système la teinte), sans les traits des tranches devenus invisibles.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.066"
+        android:scaleY="0.066"
+        android:translateX="20.208"
+        android:translateY="20.208">
+        <path android:fillColor="#FFFFFFFF" android:pathData="M252,826 h46 a12,12 0 0 1 12,12 v64 a12,12 0 0 1 -12,12 h-46 a12,12 0 0 1 -12,-12 v-64 a12,12 0 0 1 12,-12 z" />
+        <path android:fillColor="#FFFFFFFF" android:pathData="M726,826 h46 a12,12 0 0 1 12,12 v64 a12,12 0 0 1 -12,12 h-46 a12,12 0 0 1 -12,-12 v-64 a12,12 0 0 1 12,-12 z" />
+        <path android:fillColor="#FFFFFFFF" android:pathData="M130,760 h764 a20,20 0 0 1 20,20 v37 a20,20 0 0 1 -20,20 h-764 a20,20 0 0 1 -20,-20 v-37 a20,20 0 0 1 20,-20 z" />
+        <!-- Livres légèrement raccourcis : un fin espace les sépare de l'étagère, qui sinon se confondraient. -->
+        <path android:fillColor="#FFFFFFFF" android:pathData="M182,286 h132 a14,14 0 0 1 14,14 v432 a14,14 0 0 1 -14,14 h-132 a14,14 0 0 1 -14,-14 v-432 a14,14 0 0 1 14,-14 z" />
+        <path android:fillColor="#FFFFFFFF" android:pathData="M358,110 h132 a14,14 0 0 1 14,14 v608 a14,14 0 0 1 -14,14 h-132 a14,14 0 0 1 -14,-14 v-608 a14,14 0 0 1 14,-14 z" />
+        <path android:fillColor="#FFFFFFFF" android:pathData="M534,206 h132 a14,14 0 0 1 14,14 v512 a14,14 0 0 1 -14,14 h-132 a14,14 0 0 1 -14,-14 v-512 a14,14 0 0 1 14,-14 z" />
+        <path android:fillColor="#FFFFFFFF" android:pathData="M710,344 h132 a14,14 0 0 1 14,14 v374 a14,14 0 0 1 -14,14 h-132 a14,14 0 0 1 -14,-14 v-374 a14,14 0 0 1 14,-14 z" />
+    </group>
+</vector>
